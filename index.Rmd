@@ -7,7 +7,7 @@ output: html_document
 
 # Using Biometric Data To Determine "Goodness" of Exercise
 
-This project uses the data set of biometrics from the paper cited below to create a prediction model that provides feedback on whether an exercise has been executed in a proper way.
+This project uses the data set of bio metrics from the paper cited below to create a prediction model that provides feedback on whether an exercise has been executed in a proper way.
 
 Citation:
 Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013.
@@ -97,8 +97,8 @@ Model/method selection in caret is a data mining project in an of itself since t
 ``` {r trainmodels}
 # load saved models if they exist, otherwise, we have to train them.  remove file for final run.
 
-if(file.exists("mymodels")) {
-  load("mymodels")
+if(file.exists("mymodels.sav")) {
+  load("mymodels.sav")
 } else {
   fitControl <- trainControl(method="repeatedcv",repeats=3)
   system.time(
@@ -109,7 +109,7 @@ if(file.exists("mymodels")) {
   )
 
   # save these models to disk as they take a lot of time to train
-  save.image(list = c("RFmodelFit","SVMmodelFit"),"mymodels",ascii=T)
+  save(list = c("RFmodelFit","SVMmodelFit"),file="mymodels.sav")
 }
 ```
 
