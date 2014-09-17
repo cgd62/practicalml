@@ -1,0 +1,157 @@
+---
+title: "Practical Machine Learning Course Project"
+author: "Greg Doherty"
+date: "September 20th, 2014"
+output: html_document
+---
+
+# Using Biometric Data To Determine "Goodness" of Exercise
+
+This project uses the data set of biometrics from the paper cited below to create a prediction model that provides feedback on whether an exercise has been executed in a proper way.
+
+Citation:
+Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013.
+http://groupware.les.inf.puc-rio.br/public/papers/2013.Velloso.QAR-WLE.pdf
+
+# Initialization & Data Load
+
+Initialization will use the caret package, the doMC package to make use of caret's parallel mode.  Will try a random forest and a support vector machine to compare and choose the best.
+
+```{r setup}
+library(caret)
+library(doMC)
+library(nnet)
+library(randomForest)
+library(kernlab)
+library(e1071)
+
+registerDoMC(cores = 4)
+
+# load data sets, converting non-numerics to factors
+training <- read.csv("pml-training.csv",as.is=F)
+test <- read.csv("pml-testing.csv",as.is=F)
+```
+
+# Data Evaluation, Cleaning & Predictor Selection
+The data set has `r ncol(training)-1` attributes, and `r nrow(training)` examples.  The last attribute, classe, provide the correct result for each example.
+
+## Selecting by rationale
+It is reasonable to assume that record sequence number N and user_name will not contribute.  The timestamps and converted dates could be used if creating a time series predictor set were going to be used, but it is not necessary.  Preliminary analysis found good models without having to use time sequence as a factor, except I do leave num_window and factor new_window as potential proxies for sequence/time.
+
+``` {r removerat}
+removeCols <- c( 1:5 )           # remove N, user_name, timestamp(s), converted date
+```
+
+## Selecting by percentage of values == NA
+Columns that are more than half NA are not very useful for prediction.
+
+
+``` {r removeNA}
+NA_threshold <- 0.50
+nTrain <- nrow(training)
+
+i <- 1
+while(i < ncol(training)) {
+  nNA <- sum(is.na(training[,i]))
+  if((nNA/nTrain) >= NA_threshold) {
+     removeCols <- c(removeCols, i)
+  }
+  i <- i + 1
+}
+
+training <- training[,-removeCols]
+test <- test[,-removeCols]
+```
+## Selecting by reasonable skewness
+Columns that have extremely high skew are also not very useful for prediction.
+
+``` {r removeskew}
+i <- 1
+removeCols <- c( )
+while(i < ncol(training)) {
+  skew <- abs(skewness(as.numeric(training[,i]),na.rm=T))
+  if(skew > 6) {
+     removeCols <- c(removeCols, i)
+  }
+  i <- i + 1
+}
+
+training <- training[,-removeCols]
+test <- test[,-removeCols]
+```
+
+# Create Training and Cross-Validation data sets
+Set aside 25% of the training data for cross-validation.
+``` {r traintest}
+inTrain <- createDataPartition(y=training$classe, p=0.75, list=FALSE)
+
+train <- training[inTrain,]
+crossval <- training[-inTrain,]
+```
+
+# Train Two Kinds of Models
+Model/method selection in caret is a data mining project in an of itself since there are **so many** methods supported.  I picked two that I knew from the literature were very good in general, random forests and support vector machines.  For the support vector machine I selected as radial basis function as the kernel trick.
+
+(For the record, I also tried neural nets, but found them slow to train, limited by number of hidden nodes (roughly < 20) and I could not figure out how to pass down the 'size' parameter properly.  The accuracy for the neural net I was able to train was 43%, so I eliminated neural nets from use in this project.) 
+
+``` {r trainmodels}
+# load saved models if they exist, otherwise, we have to train them.  remove file for final run.
+
+if(file.exists("mymodels")) {
+  load("mymodels")
+} else {
+  fitControl <- trainControl(method="repeatedcv",repeats=3)
+  system.time(
+    RFmodelFit <- train(classe ~ .,data=train,method="rf",trControl=fitControl)
+  )
+  system.time(
+    SVMmodelFit <- train(classe ~ .,data=train,method="svmRadial",trControl = fitControl)
+  )
+
+  # save these models to disk as they take a lot of time to train
+  save.image(list = c("RFmodelFit","SVMmodelFit"),"mymodels",ascii=T)
+}
+```
+
+# Evaluate And Compare Models
+Now evaluate models using the cross-validation data set.  For comparison of goodness of fit, will use Kappa metric.
+
+```{r evaluatemodels}
+
+RFmodelFit
+RFpred <- predict(RFmodelFit,newdata=crossval)
+RFcv <- confusionMatrix(RFpred,crossval$classe)
+RFcv
+
+SVMmodelFit
+SVMpred <- predict(SVMmodelFit,newdata=crossval)
+SVMcv <- confusionMatrix(SVMpred,crossval$classe)
+SVMcv
+
+#cv$overall[2] is the Kappa value for the model from the confusion matrix.  Pick the best model based on Kappa.
+
+if(RFcv$overall[2] > SVMcv$overall[2]) {
+  pred <- RFpred
+  best <- "random forest"
+else {
+  pred <- SVMpred
+  best <- "support vector machine"
+}
+```
+
+The best model was the `r best` model.
+
+``` {r writesubmission}
+# write best predictions to files for submission
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+pml_write_files(pred)
+```
+
+
