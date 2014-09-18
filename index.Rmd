@@ -44,9 +44,9 @@ Looking over the data set, there is a lot of sparseness and NA's, so a little wo
 ## Selecting by rationale
 Looking at the first few columns:
 ``` {r peek}
-head(str(training),5)
+str(training,list.len=5)
 ```
-It is reasonable to assume that record sequence number N and user_name will not contribute.  The timestamps and converted dates could be used if creating a time series predictor set were going to be used, but it is not necessary.  Preliminary analysis found good models without having to use time sequence as a factor, except I do leave num_window and factor new_window as potential proxies for sequence/time.
+It is reasonable to assume that record sequence number N and user_name will not contribute.  The timestamps and converted dates could be used if creating a time series predictor window set were going to be used, but it is not necessary.  Preliminary analysis found great models without having to use time sequence as a factor, except I do leave num_window and factor new_window as potential proxies for sequence/time, though new_window is removed by the skewness step below.
 
 ``` {r removerat}
 removeCols <- c( 1:5 )           # remove N, user_name, timestamp(s), converted date
@@ -128,7 +128,7 @@ if(file.exists("mymodels.sav")) {
 ```
 
 # Evaluate And Compare Models
-Now evaluate models using the cross-validation data set.  For comparison of goodness of fit, will use Kappa metric.
+Now evaluate models using the cross-validation data set.  For comparison of goodness of fit use Kappa metric.
 
 ## Random Forest Model Summary
 ```{r summrf}
@@ -146,7 +146,7 @@ SVMcv <- confusionMatrix(SVMpred,crossval$classe)
 SVMcv
 ```
 
-## Use the Kappa value to select the best model to make predictions with using the cross-validation data set.
+## Use the Kappa value to select the best model to make final predictions with
 ``` {r select}
 #cv$overall[2] is the Kappa value for the model from the confusion matrix.  Pick the best model based on Kappa.
 
