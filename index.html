@@ -61,12 +61,14 @@ if (window.hljs && document.readyState && document.readyState === "complete") {
 
 <div id="using-biometric-data-to-determine-goodness-of-exercise" class="section level1">
 <h1>Using Biometric Data To Determine “Goodness” of Exercise</h1>
-<p>This project uses the data set of biometrics from the paper cited below to create a prediction model that provides feedback on whether an exercise has been executed in a proper way.</p>
+<p>This project uses the data set of biometrics from the paper cited below to create a prediction model that provides feedback on whether an exercise has been done in a proper way.</p>
 <p>Citation: Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human ’13) . Stuttgart, Germany: ACM SIGCHI, 2013. <a href="http://groupware.les.inf.puc-rio.br/public/papers/2013.Velloso.QAR-WLE.pdf">http://groupware.les.inf.puc-rio.br/public/papers/2013.Velloso.QAR-WLE.pdf</a></p>
 </div>
 <div id="initialization-data-load" class="section level1">
 <h1>Initialization &amp; Data Load</h1>
-<p>Initialization will use the caret package, the doMC package to make use of caret’s parallel mode. Will try a neural net, a random forest, and a support vector machine to compare and choose the best.</p>
+<p>For initialization we load the caret library and the doMC library to make use of caret’s parallel mode. Will try a random forest and a support vector machine to compare and choose the best, so load the randomForest and kernlab libraries, and e1071 for its utility functions. caret would load these automatically but I wanted to keep my subsequent output cleaner below.</p>
+<p>Using the doMC library, the number of cores to use for parallel processing is set to 4. caret by default makes use of parallel functionality if it is provided. This helps reduce elapsed time to build models.</p>
+<p>The training and test data sets are loaded, and read.csv() is allowed to convert appropriate values to factors.</p>
 <pre class="r"><code>library(caret)</code></pre>
 <pre><code>## Loading required package: lattice
 ## Loading required package: ggplot2</code></pre>
@@ -74,8 +76,7 @@ if (window.hljs && document.readyState && document.readyState === "complete") {
 <pre><code>## Loading required package: foreach
 ## Loading required package: iterators
 ## Loading required package: parallel</code></pre>
-<pre class="r"><code>library(nnet)
-library(randomForest)</code></pre>
+<pre class="r"><code>library(randomForest)</code></pre>
 <pre><code>## randomForest 4.6-10
 ## Type rfNews() to see new features/changes/bug fixes.</code></pre>
 <pre class="r"><code>library(kernlab)
@@ -89,13 +90,257 @@ test &lt;- read.csv(&quot;pml-testing.csv&quot;,as.is=F)</code></pre>
 </div>
 <div id="data-evaluation-cleaning-predictor-selection" class="section level1">
 <h1>Data Evaluation, Cleaning &amp; Predictor Selection</h1>
+<p>The data set has 159 attributes, and 19622 examples. The last attribute, <em>classe</em>, provides the correct result for each example.</p>
+<p>Looking over the data set, there is a lot of sparseness and NA’s, so a little work needs to be done on picking good predictors to build a model with (feature selection).</p>
 <div id="selecting-by-rationale" class="section level2">
 <h2>Selecting by rationale</h2>
-<p>It is reasonable to assume that record sequence number N and user_name will not contribute. The timestamps and converted dates could be used if creating a time series predictor set were going to be used, but it is not necessary. Preliminary analysis found good models without having to use time sequence as a factor, except I do use num_window and factor new_window as sort of proxies for sequence/time.</p>
+<p>Looking at the first few columns:</p>
+<pre class="r"><code>head(training,5)</code></pre>
+<pre><code>##   X user_name raw_timestamp_part_1 raw_timestamp_part_2   cvtd_timestamp
+## 1 1  carlitos           1323084231               788290 05/12/2011 11:23
+## 2 2  carlitos           1323084231               808298 05/12/2011 11:23
+## 3 3  carlitos           1323084231               820366 05/12/2011 11:23
+## 4 4  carlitos           1323084232               120339 05/12/2011 11:23
+## 5 5  carlitos           1323084232               196328 05/12/2011 11:23
+##   new_window num_window roll_belt pitch_belt yaw_belt total_accel_belt
+## 1         no         11      1.41       8.07    -94.4                3
+## 2         no         11      1.41       8.07    -94.4                3
+## 3         no         11      1.42       8.07    -94.4                3
+## 4         no         12      1.48       8.05    -94.4                3
+## 5         no         12      1.48       8.07    -94.4                3
+##   kurtosis_roll_belt kurtosis_picth_belt kurtosis_yaw_belt
+## 1                                                         
+## 2                                                         
+## 3                                                         
+## 4                                                         
+## 5                                                         
+##   skewness_roll_belt skewness_roll_belt.1 skewness_yaw_belt max_roll_belt
+## 1                                                                      NA
+## 2                                                                      NA
+## 3                                                                      NA
+## 4                                                                      NA
+## 5                                                                      NA
+##   max_picth_belt max_yaw_belt min_roll_belt min_pitch_belt min_yaw_belt
+## 1             NA                         NA             NA             
+## 2             NA                         NA             NA             
+## 3             NA                         NA             NA             
+## 4             NA                         NA             NA             
+## 5             NA                         NA             NA             
+##   amplitude_roll_belt amplitude_pitch_belt amplitude_yaw_belt
+## 1                  NA                   NA                   
+## 2                  NA                   NA                   
+## 3                  NA                   NA                   
+## 4                  NA                   NA                   
+## 5                  NA                   NA                   
+##   var_total_accel_belt avg_roll_belt stddev_roll_belt var_roll_belt
+## 1                   NA            NA               NA            NA
+## 2                   NA            NA               NA            NA
+## 3                   NA            NA               NA            NA
+## 4                   NA            NA               NA            NA
+## 5                   NA            NA               NA            NA
+##   avg_pitch_belt stddev_pitch_belt var_pitch_belt avg_yaw_belt
+## 1             NA                NA             NA           NA
+## 2             NA                NA             NA           NA
+## 3             NA                NA             NA           NA
+## 4             NA                NA             NA           NA
+## 5             NA                NA             NA           NA
+##   stddev_yaw_belt var_yaw_belt gyros_belt_x gyros_belt_y gyros_belt_z
+## 1              NA           NA         0.00         0.00        -0.02
+## 2              NA           NA         0.02         0.00        -0.02
+## 3              NA           NA         0.00         0.00        -0.02
+## 4              NA           NA         0.02         0.00        -0.03
+## 5              NA           NA         0.02         0.02        -0.02
+##   accel_belt_x accel_belt_y accel_belt_z magnet_belt_x magnet_belt_y
+## 1          -21            4           22            -3           599
+## 2          -22            4           22            -7           608
+## 3          -20            5           23            -2           600
+## 4          -22            3           21            -6           604
+## 5          -21            2           24            -6           600
+##   magnet_belt_z roll_arm pitch_arm yaw_arm total_accel_arm var_accel_arm
+## 1          -313     -128      22.5    -161              34            NA
+## 2          -311     -128      22.5    -161              34            NA
+## 3          -305     -128      22.5    -161              34            NA
+## 4          -310     -128      22.1    -161              34            NA
+## 5          -302     -128      22.1    -161              34            NA
+##   avg_roll_arm stddev_roll_arm var_roll_arm avg_pitch_arm stddev_pitch_arm
+## 1           NA              NA           NA            NA               NA
+## 2           NA              NA           NA            NA               NA
+## 3           NA              NA           NA            NA               NA
+## 4           NA              NA           NA            NA               NA
+## 5           NA              NA           NA            NA               NA
+##   var_pitch_arm avg_yaw_arm stddev_yaw_arm var_yaw_arm gyros_arm_x
+## 1            NA          NA             NA          NA        0.00
+## 2            NA          NA             NA          NA        0.02
+## 3            NA          NA             NA          NA        0.02
+## 4            NA          NA             NA          NA        0.02
+## 5            NA          NA             NA          NA        0.00
+##   gyros_arm_y gyros_arm_z accel_arm_x accel_arm_y accel_arm_z magnet_arm_x
+## 1        0.00       -0.02        -288         109        -123         -368
+## 2       -0.02       -0.02        -290         110        -125         -369
+## 3       -0.02       -0.02        -289         110        -126         -368
+## 4       -0.03        0.02        -289         111        -123         -372
+## 5       -0.03        0.00        -289         111        -123         -374
+##   magnet_arm_y magnet_arm_z kurtosis_roll_arm kurtosis_picth_arm
+## 1          337          516                                     
+## 2          337          513                                     
+## 3          344          513                                     
+## 4          344          512                                     
+## 5          337          506                                     
+##   kurtosis_yaw_arm skewness_roll_arm skewness_pitch_arm skewness_yaw_arm
+## 1                                                                       
+## 2                                                                       
+## 3                                                                       
+## 4                                                                       
+## 5                                                                       
+##   max_roll_arm max_picth_arm max_yaw_arm min_roll_arm min_pitch_arm
+## 1           NA            NA          NA           NA            NA
+## 2           NA            NA          NA           NA            NA
+## 3           NA            NA          NA           NA            NA
+## 4           NA            NA          NA           NA            NA
+## 5           NA            NA          NA           NA            NA
+##   min_yaw_arm amplitude_roll_arm amplitude_pitch_arm amplitude_yaw_arm
+## 1          NA                 NA                  NA                NA
+## 2          NA                 NA                  NA                NA
+## 3          NA                 NA                  NA                NA
+## 4          NA                 NA                  NA                NA
+## 5          NA                 NA                  NA                NA
+##   roll_dumbbell pitch_dumbbell yaw_dumbbell kurtosis_roll_dumbbell
+## 1         13.05         -70.49       -84.87                       
+## 2         13.13         -70.64       -84.71                       
+## 3         12.85         -70.28       -85.14                       
+## 4         13.43         -70.39       -84.87                       
+## 5         13.38         -70.43       -84.85                       
+##   kurtosis_picth_dumbbell kurtosis_yaw_dumbbell skewness_roll_dumbbell
+## 1                                                                     
+## 2                                                                     
+## 3                                                                     
+## 4                                                                     
+## 5                                                                     
+##   skewness_pitch_dumbbell skewness_yaw_dumbbell max_roll_dumbbell
+## 1                                                              NA
+## 2                                                              NA
+## 3                                                              NA
+## 4                                                              NA
+## 5                                                              NA
+##   max_picth_dumbbell max_yaw_dumbbell min_roll_dumbbell min_pitch_dumbbell
+## 1                 NA                                 NA                 NA
+## 2                 NA                                 NA                 NA
+## 3                 NA                                 NA                 NA
+## 4                 NA                                 NA                 NA
+## 5                 NA                                 NA                 NA
+##   min_yaw_dumbbell amplitude_roll_dumbbell amplitude_pitch_dumbbell
+## 1                                       NA                       NA
+## 2                                       NA                       NA
+## 3                                       NA                       NA
+## 4                                       NA                       NA
+## 5                                       NA                       NA
+##   amplitude_yaw_dumbbell total_accel_dumbbell var_accel_dumbbell
+## 1                                          37                 NA
+## 2                                          37                 NA
+## 3                                          37                 NA
+## 4                                          37                 NA
+## 5                                          37                 NA
+##   avg_roll_dumbbell stddev_roll_dumbbell var_roll_dumbbell
+## 1                NA                   NA                NA
+## 2                NA                   NA                NA
+## 3                NA                   NA                NA
+## 4                NA                   NA                NA
+## 5                NA                   NA                NA
+##   avg_pitch_dumbbell stddev_pitch_dumbbell var_pitch_dumbbell
+## 1                 NA                    NA                 NA
+## 2                 NA                    NA                 NA
+## 3                 NA                    NA                 NA
+## 4                 NA                    NA                 NA
+## 5                 NA                    NA                 NA
+##   avg_yaw_dumbbell stddev_yaw_dumbbell var_yaw_dumbbell gyros_dumbbell_x
+## 1               NA                  NA               NA                0
+## 2               NA                  NA               NA                0
+## 3               NA                  NA               NA                0
+## 4               NA                  NA               NA                0
+## 5               NA                  NA               NA                0
+##   gyros_dumbbell_y gyros_dumbbell_z accel_dumbbell_x accel_dumbbell_y
+## 1            -0.02             0.00             -234               47
+## 2            -0.02             0.00             -233               47
+## 3            -0.02             0.00             -232               46
+## 4            -0.02            -0.02             -232               48
+## 5            -0.02             0.00             -233               48
+##   accel_dumbbell_z magnet_dumbbell_x magnet_dumbbell_y magnet_dumbbell_z
+## 1             -271              -559               293               -65
+## 2             -269              -555               296               -64
+## 3             -270              -561               298               -63
+## 4             -269              -552               303               -60
+## 5             -270              -554               292               -68
+##   roll_forearm pitch_forearm yaw_forearm kurtosis_roll_forearm
+## 1         28.4         -63.9        -153                      
+## 2         28.3         -63.9        -153                      
+## 3         28.3         -63.9        -152                      
+## 4         28.1         -63.9        -152                      
+## 5         28.0         -63.9        -152                      
+##   kurtosis_picth_forearm kurtosis_yaw_forearm skewness_roll_forearm
+## 1                                                                  
+## 2                                                                  
+## 3                                                                  
+## 4                                                                  
+## 5                                                                  
+##   skewness_pitch_forearm skewness_yaw_forearm max_roll_forearm
+## 1                                                           NA
+## 2                                                           NA
+## 3                                                           NA
+## 4                                                           NA
+## 5                                                           NA
+##   max_picth_forearm max_yaw_forearm min_roll_forearm min_pitch_forearm
+## 1                NA                               NA                NA
+## 2                NA                               NA                NA
+## 3                NA                               NA                NA
+## 4                NA                               NA                NA
+## 5                NA                               NA                NA
+##   min_yaw_forearm amplitude_roll_forearm amplitude_pitch_forearm
+## 1                                     NA                      NA
+## 2                                     NA                      NA
+## 3                                     NA                      NA
+## 4                                     NA                      NA
+## 5                                     NA                      NA
+##   amplitude_yaw_forearm total_accel_forearm var_accel_forearm
+## 1                                        36                NA
+## 2                                        36                NA
+## 3                                        36                NA
+## 4                                        36                NA
+## 5                                        36                NA
+##   avg_roll_forearm stddev_roll_forearm var_roll_forearm avg_pitch_forearm
+## 1               NA                  NA               NA                NA
+## 2               NA                  NA               NA                NA
+## 3               NA                  NA               NA                NA
+## 4               NA                  NA               NA                NA
+## 5               NA                  NA               NA                NA
+##   stddev_pitch_forearm var_pitch_forearm avg_yaw_forearm
+## 1                   NA                NA              NA
+## 2                   NA                NA              NA
+## 3                   NA                NA              NA
+## 4                   NA                NA              NA
+## 5                   NA                NA              NA
+##   stddev_yaw_forearm var_yaw_forearm gyros_forearm_x gyros_forearm_y
+## 1                 NA              NA            0.03            0.00
+## 2                 NA              NA            0.02            0.00
+## 3                 NA              NA            0.03           -0.02
+## 4                 NA              NA            0.02           -0.02
+## 5                 NA              NA            0.02            0.00
+##   gyros_forearm_z accel_forearm_x accel_forearm_y accel_forearm_z
+## 1           -0.02             192             203            -215
+## 2           -0.02             192             203            -216
+## 3            0.00             196             204            -213
+## 4            0.00             189             206            -214
+## 5           -0.02             189             206            -214
+##   magnet_forearm_x magnet_forearm_y magnet_forearm_z classe
+## 1              -17              654              476      A
+## 2              -18              661              473      A
+## 3              -18              658              469      A
+## 4              -16              658              469      A
+## 5              -17              655              473      A</code></pre>
+<p>It is reasonable to assume that record sequence number N and user_name will not contribute. The timestamps and converted dates could be used if creating a time series predictor set were going to be used, but it is not necessary. Preliminary analysis found good models without having to use time sequence as a factor, except I do leave num_window and factor new_window as potential proxies for sequence/time.</p>
 <pre class="r"><code>removeCols &lt;- c( 1:5 )           # remove N, user_name, timestamp(s), converted date</code></pre>
 </div>
-<div id="selecting-by-percentage-of-values-na" class="section level2">
-<h2>Selecting by percentage of values == NA</h2>
+<div id="selecting-by-decent-percentage-of-values-na" class="section level2">
+<h2>Selecting by decent percentage of values != NA</h2>
 <p>Columns that are more than half NA are not very useful for prediction.</p>
 <pre class="r"><code>NA_threshold &lt;- 0.50
 nTrain &lt;- nrow(training)
@@ -128,6 +373,60 @@ while(i &lt; ncol(training)) {
 training &lt;- training[,-removeCols]
 test &lt;- test[,-removeCols]</code></pre>
 </div>
+<div id="these-are-the-attributes-selected-as-predictors" class="section level2">
+<h2>These Are The Attributes Selected As Predictors</h2>
+<pre class="r"><code>str(training)</code></pre>
+<pre><code>## 'data.frame':    19622 obs. of  49 variables:
+##  $ num_window          : int  11 11 11 12 12 12 12 12 12 12 ...
+##  $ roll_belt           : num  1.41 1.41 1.42 1.48 1.48 1.45 1.42 1.42 1.43 1.45 ...
+##  $ pitch_belt          : num  8.07 8.07 8.07 8.05 8.07 8.06 8.09 8.13 8.16 8.17 ...
+##  $ yaw_belt            : num  -94.4 -94.4 -94.4 -94.4 -94.4 -94.4 -94.4 -94.4 -94.4 -94.4 ...
+##  $ total_accel_belt    : int  3 3 3 3 3 3 3 3 3 3 ...
+##  $ gyros_belt_x        : num  0 0.02 0 0.02 0.02 0.02 0.02 0.02 0.02 0.03 ...
+##  $ gyros_belt_y        : num  0 0 0 0 0.02 0 0 0 0 0 ...
+##  $ gyros_belt_z        : num  -0.02 -0.02 -0.02 -0.03 -0.02 -0.02 -0.02 -0.02 -0.02 0 ...
+##  $ accel_belt_x        : int  -21 -22 -20 -22 -21 -21 -22 -22 -20 -21 ...
+##  $ accel_belt_y        : int  4 4 5 3 2 4 3 4 2 4 ...
+##  $ accel_belt_z        : int  22 22 23 21 24 21 21 21 24 22 ...
+##  $ magnet_belt_x       : int  -3 -7 -2 -6 -6 0 -4 -2 1 -3 ...
+##  $ magnet_belt_y       : int  599 608 600 604 600 603 599 603 602 609 ...
+##  $ magnet_belt_z       : int  -313 -311 -305 -310 -302 -312 -311 -313 -312 -308 ...
+##  $ roll_arm            : num  -128 -128 -128 -128 -128 -128 -128 -128 -128 -128 ...
+##  $ pitch_arm           : num  22.5 22.5 22.5 22.1 22.1 22 21.9 21.8 21.7 21.6 ...
+##  $ yaw_arm             : num  -161 -161 -161 -161 -161 -161 -161 -161 -161 -161 ...
+##  $ total_accel_arm     : int  34 34 34 34 34 34 34 34 34 34 ...
+##  $ gyros_arm_x         : num  0 0.02 0.02 0.02 0 0.02 0 0.02 0.02 0.02 ...
+##  $ gyros_arm_y         : num  0 -0.02 -0.02 -0.03 -0.03 -0.03 -0.03 -0.02 -0.03 -0.03 ...
+##  $ gyros_arm_z         : num  -0.02 -0.02 -0.02 0.02 0 0 0 0 -0.02 -0.02 ...
+##  $ accel_arm_x         : int  -288 -290 -289 -289 -289 -289 -289 -289 -288 -288 ...
+##  $ accel_arm_y         : int  109 110 110 111 111 111 111 111 109 110 ...
+##  $ accel_arm_z         : int  -123 -125 -126 -123 -123 -122 -125 -124 -122 -124 ...
+##  $ magnet_arm_x        : int  -368 -369 -368 -372 -374 -369 -373 -372 -369 -376 ...
+##  $ magnet_arm_y        : int  337 337 344 344 337 342 336 338 341 334 ...
+##  $ magnet_arm_z        : int  516 513 513 512 506 513 509 510 518 516 ...
+##  $ roll_dumbbell       : num  13.1 13.1 12.9 13.4 13.4 ...
+##  $ pitch_dumbbell      : num  -70.5 -70.6 -70.3 -70.4 -70.4 ...
+##  $ yaw_dumbbell        : num  -84.9 -84.7 -85.1 -84.9 -84.9 ...
+##  $ total_accel_dumbbell: int  37 37 37 37 37 37 37 37 37 37 ...
+##  $ accel_dumbbell_x    : int  -234 -233 -232 -232 -233 -234 -232 -234 -232 -235 ...
+##  $ accel_dumbbell_y    : int  47 47 46 48 48 48 47 46 47 48 ...
+##  $ accel_dumbbell_z    : int  -271 -269 -270 -269 -270 -269 -270 -272 -269 -270 ...
+##  $ magnet_dumbbell_x   : int  -559 -555 -561 -552 -554 -558 -551 -555 -549 -558 ...
+##  $ magnet_dumbbell_y   : int  293 296 298 303 292 294 295 300 292 291 ...
+##  $ magnet_dumbbell_z   : num  -65 -64 -63 -60 -68 -66 -70 -74 -65 -69 ...
+##  $ roll_forearm        : num  28.4 28.3 28.3 28.1 28 27.9 27.9 27.8 27.7 27.7 ...
+##  $ pitch_forearm       : num  -63.9 -63.9 -63.9 -63.9 -63.9 -63.9 -63.9 -63.8 -63.8 -63.8 ...
+##  $ yaw_forearm         : num  -153 -153 -152 -152 -152 -152 -152 -152 -152 -152 ...
+##  $ total_accel_forearm : int  36 36 36 36 36 36 36 36 36 36 ...
+##  $ gyros_forearm_x     : num  0.03 0.02 0.03 0.02 0.02 0.02 0.02 0.02 0.03 0.02 ...
+##  $ accel_forearm_x     : int  192 192 196 189 189 193 195 193 193 190 ...
+##  $ accel_forearm_y     : int  203 203 204 206 206 203 205 205 204 205 ...
+##  $ accel_forearm_z     : int  -215 -216 -213 -214 -214 -215 -215 -213 -214 -215 ...
+##  $ magnet_forearm_x    : int  -17 -18 -18 -16 -17 -9 -18 -9 -16 -22 ...
+##  $ magnet_forearm_y    : num  654 661 658 658 655 660 659 660 653 656 ...
+##  $ magnet_forearm_z    : num  476 473 469 469 473 478 470 474 476 473 ...
+##  $ classe              : Factor w/ 5 levels &quot;A&quot;,&quot;B&quot;,&quot;C&quot;,&quot;D&quot;,..: 1 1 1 1 1 1 1 1 1 1 ...</code></pre>
+</div>
 </div>
 <div id="create-training-and-cross-validation-data-sets" class="section level1">
 <h1>Create Training and Cross-Validation data sets</h1>
@@ -137,12 +436,175 @@ test &lt;- test[,-removeCols]</code></pre>
 train &lt;- training[inTrain,]
 crossval &lt;- training[-inTrain,]</code></pre>
 </div>
-<div id="train-three-kinds-of-models" class="section level1">
-<h1>Train Three Kinds of Models</h1>
-<pre class="r"><code>fitControl &lt;- trainControl(method=&quot;repeatedcv&quot;,repeats=3)
-#NNmodelFit &lt;- train(classe ~ .,data=train,method=&quot;nnet&quot;,trControl=fitControl)
-#RFmodelFit &lt;- train(classe ~ .,data=train,method=&quot;rf&quot;,trControl=fitControl)
-#SVMmodelFit &lt;- train(classe ~ .,data=train,method=&quot;svmRadial&quot;,trControl = fitControl)</code></pre>
+<div id="train-two-kinds-of-models" class="section level1">
+<h1>Train Two Kinds of Models</h1>
+<p>Model/method selection in caret is a data mining project in an of itself since there are <strong>so many</strong> methods supported. I picked two that I knew from the literature were very good in general, random forests and support vector machines. For the support vector machine I selected a radial basis function as the kernel trick.</p>
+<p>For development purposes the code below supports saving trained models and restoring from a file, if the file exists. This makes iterating during development possible as the models take over an hour to train.</p>
+<p>(For the record, I also tried neural nets, but found them slow to train, limited by number of hidden nodes (roughly &lt; 20) and I could not figure out how to pass down the ‘size’ parameter properly. The accuracy for the neural net I was able to train was 43%, so I eliminated neural nets from final use in this project.)</p>
+<pre class="r"><code># load saved models if they exist, otherwise, we have to train them.  remove file for final run.
+
+if(file.exists(&quot;mymodels.sav&quot;)) {
+  load(&quot;mymodels.sav&quot;)
+} else {
+  fitControl &lt;- trainControl(method=&quot;repeatedcv&quot;,repeats=3)
+  
+  RFmodelFit &lt;- train(classe ~ .,data=train,method=&quot;rf&quot;,trControl=fitControl)
+  
+  SVMmodelFit &lt;- train(classe ~ .,data=train,method=&quot;svmRadial&quot;,trControl = fitControl)
+
+  # save these models to disk as they take a lot of time to train
+  save(list = c(&quot;RFmodelFit&quot;,&quot;SVMmodelFit&quot;),file=&quot;mymodels.sav&quot;)
+}</code></pre>
+</div>
+<div id="evaluate-and-compare-models" class="section level1">
+<h1>Evaluate And Compare Models</h1>
+<p>Now evaluate models using the cross-validation data set. For comparison of goodness of fit, will use Kappa metric.</p>
+<div id="random-forest-model-summary" class="section level2">
+<h2>Random Forest Model Summary</h2>
+<pre class="r"><code>RFmodelFit</code></pre>
+<pre><code>## Random Forest 
+## 
+## 14718 samples
+##    48 predictor
+##     5 classes: 'A', 'B', 'C', 'D', 'E' 
+## 
+## No pre-processing
+## Resampling: Cross-Validated (10 fold, repeated 3 times) 
+## 
+## Summary of sample sizes: 13246, 13246, 13247, 13245, 13247, 13248, ... 
+## 
+## Resampling results across tuning parameters:
+## 
+##   mtry  Accuracy  Kappa  Accuracy SD  Kappa SD
+##    2    1         1      0.002        0.003   
+##   25    1         1      0.001        0.002   
+##   48    1         1      0.002        0.002   
+## 
+## Accuracy was used to select the optimal model using  the largest value.
+## The final value used for the model was mtry = 25.</code></pre>
+<pre class="r"><code>RFpred &lt;- predict(RFmodelFit,newdata=crossval)
+RFcv &lt;- confusionMatrix(RFpred,crossval$classe)
+RFcv</code></pre>
+<pre><code>## Confusion Matrix and Statistics
+## 
+##           Reference
+## Prediction    A    B    C    D    E
+##          A 1394    0    0    0    0
+##          B    0  948    0    0    0
+##          C    0    1  855    3    0
+##          D    0    0    0  801    1
+##          E    1    0    0    0  900
+## 
+## Overall Statistics
+##                                     
+##                Accuracy : 0.999     
+##                  95% CI : (0.997, 1)
+##     No Information Rate : 0.284     
+##     P-Value [Acc &gt; NIR] : &lt;2e-16    
+##                                     
+##                   Kappa : 0.998     
+##  Mcnemar's Test P-Value : NA        
+## 
+## Statistics by Class:
+## 
+##                      Class: A Class: B Class: C Class: D Class: E
+## Sensitivity             0.999    0.999    1.000    0.996    0.999
+## Specificity             1.000    1.000    0.999    1.000    1.000
+## Pos Pred Value          1.000    1.000    0.995    0.999    0.999
+## Neg Pred Value          1.000    1.000    1.000    0.999    1.000
+## Prevalence              0.284    0.194    0.174    0.164    0.184
+## Detection Rate          0.284    0.193    0.174    0.163    0.184
+## Detection Prevalence    0.284    0.193    0.175    0.164    0.184
+## Balanced Accuracy       1.000    0.999    1.000    0.998    0.999</code></pre>
+</div>
+<div id="support-vector-machine-model-summary" class="section level2">
+<h2>Support Vector Machine Model Summary</h2>
+<pre class="r"><code>SVMmodelFit</code></pre>
+<pre><code>## Support Vector Machines with Radial Basis Function Kernel 
+## 
+## 14718 samples
+##    48 predictor
+##     5 classes: 'A', 'B', 'C', 'D', 'E' 
+## 
+## No pre-processing
+## Resampling: Cross-Validated (10 fold, repeated 3 times) 
+## 
+## Summary of sample sizes: 13247, 13245, 13245, 13246, 13246, 13245, ... 
+## 
+## Resampling results across tuning parameters:
+## 
+##   C    Accuracy  Kappa  Accuracy SD  Kappa SD
+##   0.2  0.9       0.8    0.012        0.01    
+##   0.5  0.9       0.9    0.010        0.01    
+##   1.0  0.9       0.9    0.009        0.01    
+## 
+## Tuning parameter 'sigma' was held constant at a value of 0.01408
+## Accuracy was used to select the optimal model using  the largest value.
+## The final values used for the model were sigma = 0.01408 and C = 1.</code></pre>
+<pre class="r"><code>SVMpred &lt;- predict(SVMmodelFit,newdata=crossval)
+SVMcv &lt;- confusionMatrix(SVMpred,crossval$classe)
+SVMcv</code></pre>
+<pre><code>## Confusion Matrix and Statistics
+## 
+##           Reference
+## Prediction    A    B    C    D    E
+##          A 1360   59    3    2    2
+##          B   17  842   47    6    3
+##          C   12   35  786   83   23
+##          D    5    7   16  713   34
+##          E    1    6    3    0  839
+## 
+## Overall Statistics
+##                                         
+##                Accuracy : 0.926         
+##                  95% CI : (0.918, 0.933)
+##     No Information Rate : 0.284         
+##     P-Value [Acc &gt; NIR] : &lt;2e-16        
+##                                         
+##                   Kappa : 0.906         
+##  Mcnemar's Test P-Value : &lt;2e-16        
+## 
+## Statistics by Class:
+## 
+##                      Class: A Class: B Class: C Class: D Class: E
+## Sensitivity             0.975    0.887    0.919    0.887    0.931
+## Specificity             0.981    0.982    0.962    0.985    0.998
+## Pos Pred Value          0.954    0.920    0.837    0.920    0.988
+## Neg Pred Value          0.990    0.973    0.983    0.978    0.985
+## Prevalence              0.284    0.194    0.174    0.164    0.184
+## Detection Rate          0.277    0.172    0.160    0.145    0.171
+## Detection Prevalence    0.291    0.187    0.191    0.158    0.173
+## Balanced Accuracy       0.978    0.934    0.941    0.936    0.964</code></pre>
+</div>
+<div id="use-the-kappa-value-to-select-the-best-model-to-make-predictions-with-using-the-cross-validation-data-set." class="section level2">
+<h2>Use the Kappa value to select the best model to make predictions with using the cross-validation data set.</h2>
+<pre class="r"><code>#cv$overall[2] is the Kappa value for the model from the confusion matrix.  Pick the best model based on Kappa.
+
+if(RFcv$overall[2] &gt; SVMcv$overall[2]) {
+  bestModel &lt;- RFmodelFit
+  best &lt;- &quot;random forest&quot;
+} else {
+  bestModel &lt;- SVMmodelFit
+  best &lt;- &quot;support vector machine&quot;
+}</code></pre>
+<p>The best model was the random forest model.</p>
+</div>
+</div>
+<div id="make-the-final-predictions-using-the-test-data-set" class="section level1">
+<h1>Make The Final Predictions using the test data set</h1>
+<pre class="r"><code>pred &lt;- predict(bestModel,test)</code></pre>
+<p>The final predictions are: B, A, B, A, A, E, D, B, A, A, B, C, B, A, E, E, A, B, B, B</p>
+<p>Write the predictions to separate files, per instructions, to submit for grading</p>
+<pre class="r"><code># write best predictions to files for submission
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0(&quot;problem_id_&quot;,i,&quot;.txt&quot;)
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+pml_write_files(pred)</code></pre>
 </div>
 
 
