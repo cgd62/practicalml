@@ -2,7 +2,10 @@
 title: "Practical Machine Learning Course Project"
 author: "Greg Doherty"
 date: "September 20th, 2014"
-output: html_document
+output:
+  html_document:
+    toc: true
+    theme: flatly
 ---
 
 # Using Biometric Data To Determine "Goodness" of Exercise
