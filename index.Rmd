@@ -140,6 +140,7 @@ To choose best goodness of fit use Kappa metric.
 ## Random Forest Model Summary
 ```{r summrf}
 RFmodelFit
+plot(RFmodelFit)
 RFpred <- predict(RFmodelFit,newdata=crossval)
 RFcv <- confusionMatrix(RFpred,crossval$classe)
 RFcv
@@ -148,6 +149,7 @@ RFcv
 ## Support Vector Machine Model Summary
 ``` {r summsvm}
 SVMmodelFit
+plot(SVMmodelFit)
 SVMpred <- predict(SVMmodelFit,newdata=crossval)
 SVMcv <- confusionMatrix(SVMpred,crossval$classe)
 SVMcv
