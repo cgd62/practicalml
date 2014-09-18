@@ -225,7 +225,9 @@ if(file.exists(&quot;mymodels.sav&quot;)) {
 </div>
 <div id="evaluate-and-compare-models" class="section level1">
 <h1>Evaluate And Compare Models</h1>
-<p>Now evaluate models using the cross-validation data set. For comparison of goodness of fit use Kappa metric.</p>
+<p>Now evaluate models using the cross-validation data set.</p>
+<p>This allows out of sample error to be estimated. See the 95% confidence interval in the confusion matrix for each model.</p>
+<p>To choose best goodness of fit use Kappa metric.</p>
 <div id="random-forest-model-summary" class="section level2">
 <h2>Random Forest Model Summary</h2>
 <pre class="r"><code>RFmodelFit</code></pre>
